@@ -3,7 +3,12 @@ name: Bias bot alerts
 on:
   schedule:
     - cron: "10 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Send a test message only (true/false)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -23,6 +28,7 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           PROFILE: slk
+          TEST_MESSAGE: ${{ github.event.inputs.test_message || 'false' }}
         run: python bias_bot.py
       - name: Save sent-alerts state
         run: |
