@@ -28,6 +28,7 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           PROFILE: slk
+          ALERT_STAGES: "BOS,RETEST"
           TEST_MESSAGE: ${{ github.event.inputs.test_message || 'false' }}
         run: python bias_bot.py
       - name: Save sent-alerts state
