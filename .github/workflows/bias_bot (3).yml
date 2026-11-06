@@ -1,0 +1,72 @@
+name: Bias bot alerts
+
+on:
+  schedule:
+    - cron: "10 * * * *"
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Send a test message only (true/false)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bias-bot-run
+  cancel-in-progress: false   # let an in-progress run finish; queue the next one rather than overlap or kill it mid-write
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy pandas requests yfinance websocket-client
+      - name: Restore price cache
+        uses: actions/cache/restore@v4
+        with:
+          path: cache
+          key: price-cache-${{ github.run_id }}
+          restore-keys: |
+            price-cache-
+      - name: Run bot
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          PROFILE: slk
+          TEST_MESSAGE: ${{ github.event.inputs.test_message || 'false' }}
+        run: python bias_bot.py
+      - name: Save sent-alerts state
+        run: |
+          git config user.name "bias-bot"
+          git config user.email "actions@users.noreply.github.com"
+          STATE_FILE="state/sent_bias_alerts.json"
+          for i in 1 2 3 4 5; do
+            git add "$STATE_FILE"
+            if git diff --cached --quiet; then
+              echo "No state changes to commit."
+              break
+            fi
+            git commit -m "Update alert state [skip ci]" -q
+            if git push -q; then
+              echo "Pushed successfully on attempt $i."
+              break
+            fi
+            echo "Push rejected (another run updated state first) - merging and retrying ($i/5)..."
+            git fetch origin main -q
+            git show origin/main:"$STATE_FILE" > /tmp/remote_state.json 2>/dev/null || echo '{}' > /tmp/remote_state.json
+            python3 -c "import json; r=json.load(open('/tmp/remote_state.json')); l=json.load(open('$STATE_FILE')); r.update(l); json.dump(r, open('$STATE_FILE','w'), indent=2, sort_keys=True)"
+            git reset --soft origin/main
+            sleep $((RANDOM % 4 + 1))
+          done
+      - name: Save price cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: cache
+          key: price-cache-${{ github.run_id }}
