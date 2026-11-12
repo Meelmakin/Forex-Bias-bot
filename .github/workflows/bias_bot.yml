@@ -70,3 +70,4 @@ jobs:
         with:
           path: cache
           key: price-cache-${{ github.run_id }}
+          ALERT_STAGES: "BOS,RETEST,WARNING"
